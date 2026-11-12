@@ -18,7 +18,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 <canvas id="c"></canvas><pre id="t"></pre><div id="big"></div><button id="th">light / dark</button><button id="sp">spin: free</button><button id="pv">view: perspective</button>
 <script>
 // ---- CONFIG (tune here) ----
-const CFG={hp:10,heal:10,win:2,bpm0:30,bpmStep:2,bpmCap:60,cd:3,rm:3,mobBase:4,mobPer:2,flaw:100,
+const CFG={maxPhase:10,hp:10,heal:10,win:2,bpm0:30,bpmStep:3,bpmCap:60,cd:3,rm:3,mobBase:4,mobPer:2,flaw:100,
  steps:n=>Math.max(4,6-Math.floor(n/4)),   // steps every standard mob walks to reach the core
  heavyExtra:2};                            // heavy mobs walk this many extra steps
 const N=5,C=2,D=14;
@@ -41,17 +41,19 @@ function ease(){let b=null,bs=-9;for(const T of TS){let s=0;for(let i=0;i<3;i++)
 let W,H,sc,cx0,cy0,dpr=1,ortho=false;
 const proj=(x,y,z)=>{const a=R[0][0]*x+R[0][1]*y+R[0][2]*z,b=R[1][0]*x+R[1][1]*y+R[1][2]*z,c=R[2][0]*x+R[2][1]*y+R[2][2]*z,k=ortho?1:D/(D-c);return[cx0+a*sc*k,cy0-b*sc*k,c,k]};
 // ---- game state ----
-const Q=n=>({bpm:Math.min(CFG.bpmCap,CFG.bpm0+CFG.bpmStep*n),budget:CFG.mobBase+CFG.mobPer*n,peak:Math.min(4,1+(n>>2)),np:Math.min(3,(n-1)>>1),pint:Math.max(1,5-Math.floor(n/3)),hv:n>=4?Math.min(.25,.04*(n-3)):0,S:CFG.steps(n)});
+const Q=n=>({bpm:Math.min(CFG.bpmCap,CFG.bpm0+CFG.bpmStep*n),budget:CFG.mobBase+CFG.mobPer*n,peak:Math.min(4,1+(n>>2)),np:Math.min(3,(n-1)>>1),pint:1,hv:n>=4?Math.min(.25,.04*(n-3)):0,S:CFG.steps(n)});
 let G;
 const dist=(x,y,z)=>Math.abs(x-C)+Math.abs(y-C)+Math.abs(z-C);
 // A panel is a flat 1x1 tile lying between two cell layers (boundary b on axis f), sitting at cell c=[u,v].
 function blocked(a,b){for(const p of G.pan){const f=p.f;if(a[f]===b[f]||Math.min(a[f],b[f])+1!==p.b)continue;const u=(f+1)%3,v=(f+2)%3;if(a[u]===p.c[0]&&a[v]===p.c[1]&&b[u]===a[u]&&b[v]===a[v])return true}return false}
 function fresh(){const t=performance.now();G={st:'idle',n:1,hp:CFG.hp,score:0,combo:0,heal:0,mobs:[],pan:[],last:t,next:t+900,cdl:0,spawned:0,bi:0,pb:0,leaks:0,rm:0,beams:[],pop:null,flash:0,flaw:false}}
 function startPhase(){const q=Q(G.n);G.spawned=0;G.bi=0;G.pb=0;G.leaks=0;G.mobs=[];G.pan=[];
- for(let i=0;i<q.np;i++)G.pan.push({f:[1,0,2][i],b:1+rnd(4),c:[rnd(N),rnd(N)]});
+ for(let i=0;i<q.np;i++){const c=[rnd(N),rnd(N)];G.pan.push({f:[1,0,2][i],b:1+rnd(4),c,pc:c.slice()})}
  G.st='count';G.cdl=CFG.cd}
 function begin(){const t=performance.now();fresh();G.next=t+60000/Q(1).bpm;startPhase()}
-function over(){G.st='over';if(G.score>best){best=G.score;try{localStorage.setItem('axobest3',best)}catch(e){}}}
+function save(){G.nb=G.score>best;if(G.nb){best=G.score;try{localStorage.setItem('axobest3',best)}catch(e){}}}
+function over(){G.st='over';G.wt=performance.now();save()}
+function won(){G.st='win';G.wt=performance.now();save()}
 const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 // Plan a path of exactly S steps from the spawn cell to the core (never touching it early).
 function mkpath(s,S){const P=[s.slice()];let c=s;for(let r=S;r>0;r--){const v=[];
@@ -60,7 +62,7 @@ function mkpath(s,S){const P=[s.slice()];let c=s;for(let r=S;r>0;r--){const v=[]
 function spawn(hv){const S=Q(G.n).S+(Math.random()<hv?CFG.heavyExtra:0),h=S>Q(G.n).S,L=[];
  for(let x=0;x<N;x++)for(let y=0;y<N;y++)for(let z=0;z<N;z++)if((x==0||y==0||z==0||x==N-1||y==N-1||z==N-1)&&(x+y+z)%2===0&&dist(x,y,z)<=S)L.push([x,y,z]);
  const s=L[rnd(L.length)];G.mobs.push({x:s[0],y:s[1],z:s[2],px:s[0],py:s[1],pz:s[2],h,S,i:0,path:mkpath(s,S),hit:null})}
-function movePanels(){for(const p of G.pan){const d=rnd(2),c=p.c.slice();c[d]+=rnd(2)?1:-1;if(c[d]<0||c[d]>=N||G.pan.some(o=>o!==p&&o.f===p.f&&o.b===p.b&&o.c.join()===c.join()))continue;p.c=c}}
+function movePanels(){for(const p of G.pan){p.pc=p.c.slice();const d=rnd(2),c=p.c.slice();c[d]+=rnd(2)?1:-1;if(c[d]<0||c[d]>=N||G.pan.some(o=>o!==p&&o.f===p.f&&o.b===p.b&&o.c.join()===c.join()))continue;p.c=c}}
 function tick(){
  if(G.st==='count'){if(--G.cdl>0)return;G.st='play'}
  else if(G.st==='rm'){if(--G.rm<=0){G.n++;startPhase()}return}
@@ -71,7 +73,7 @@ function tick(){
  if(G.hp<=0){over();return}
  if(G.pb%q.pint===0)movePanels();
  if(G.spawned<q.budget){const k=Math.min(Math.min(1+G.bi,q.peak),q.budget-G.spawned);G.bi++;for(let i=0;i<k;i++)spawn(q.hv);G.spawned+=k}
- if(G.spawned>=q.budget&&!G.mobs.length){G.flaw=G.leaks==0;if(G.flaw){G.score+=CFG.flaw*G.n;G.hp=Math.min(CFG.hp,G.hp+1)}G.st='rm';G.rm=CFG.rm}
+ if(G.spawned>=q.budget&&!G.mobs.length){G.flaw=G.leaks==0;if(G.flaw){G.score+=CFG.flaw*G.n;G.hp=Math.min(CFG.hp,G.hp+1)}if(G.n>=CFG.maxPhase)won();else{G.st='rm';G.rm=CFG.rm}}
 }
 // ---- picking: ray through the tap hits the nearest cube face ----
 function pick(sx,sy){const ux=(sx-cx0)/sc,uy=-(sy-cy0)/sc;
@@ -112,7 +114,7 @@ cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;
  if(p.rot){rot(dx*.008,dy*.008);vel=[dx*.008,dy*.008];lastMove=performance.now()}});
 cv.addEventListener('pointerup',e=>{const p=ptr.get(e.pointerId);ptr.delete(e.pointerId);pd=0;if(!p)return;
  if(snap||performance.now()-lastMove>90)vel=[0,0];
- if(!p.rot){if(G.st==='idle'||G.st==='over')begin();else{const h=pick(e.clientX*dpr,e.clientY*dpr);if(h)fire(h)}}});
+ if(!p.rot){if(G.st==='win'||G.st==='over'){if(performance.now()-G.wt>1200){if(G.st==='win')fresh();else begin()}}else if(G.st==='idle')begin();else{const h=pick(e.clientX*dpr,e.clientY*dpr);if(h)fire(h)}}});
 cv.addEventListener('pointercancel',e=>{ptr.delete(e.pointerId);pd=0});
 cv.addEventListener('wheel',e=>{if(G.st==='idle'){e.preventDefault();zoom=Math.max(.5,Math.min(1.5,zoom*Math.exp(-e.deltaY*.001)))}},{passive:false});
 $('sp').addEventListener('click',()=>{snap=!snap;vel=[0,0];$('sp').textContent='spin: '+(snap?'snap':'free')});
@@ -139,7 +141,8 @@ function frame(){
   g.globalAlpha=(e==2?.9:e==1?.3:.08)*(.45+.55*dn);g.lineWidth=(e==2?2+2*pulse:e==1?1:.7)*dpr;
   g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke()}
  g.lineWidth=1.5*dpr;
- for(const p of G.pan){const f=p.f,u=(f+1)%3,v=(f+2)%3,pts=[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]].map(([a,b])=>{const w=[0,0,0];w[f]=p.b-2.5;w[u]=p.c[0]-2+a;w[v]=p.c[1]-2+b;return proj(...w)});
+ const te0=Math.min(1,(now-G.last)/(per*.7)),te=te0*te0*(3-2*te0);
+ for(const p of G.pan){const f=p.f,u=(f+1)%3,v=(f+2)%3,pts=[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]].map(([a,b])=>{const w=[0,0,0];w[f]=p.b-2.5;w[u]=p.pc[0]+(p.c[0]-p.pc[0])*te-2+a;w[v]=p.pc[1]+(p.c[1]-p.pc[1])*te-2+b;return proj(...w)});
   g.beginPath();pts.forEach((s,i)=>i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1]));g.closePath();g.globalAlpha=.3;g.fill();g.globalAlpha=1;g.lineWidth=2*dpr;g.stroke()}
  g.lineWidth=1.5*dpr;box(C,C,C,.28,now-G.flash<220?.8:0);
  const tt=Math.min(1,(now-G.last)/(per*.3)),L=G.mobs.map(m=>({m,p:proj(m.px+(m.x-m.px)*tt-2,m.py+(m.y-m.py)*tt-2,m.pz+(m.z-m.pz)*tt-2)})).sort((a,b)=>a.p[2]-b.p[2]);
@@ -159,12 +162,12 @@ function frame(){
   f.L.forEach((l,i)=>{const yy=y+(i-(f.L.length-1)/2)*24*dpr*pop;g.font='700 '+l.z*dpr*pop+'px ui-monospace,Menlo,monospace';g.globalAlpha=1-a*a;g.lineWidth=4*dpr;g.strokeStyle=bg;g.strokeText(l.s,x,yy);g.fillStyle=fg;g.fillText(l.s,x,yy)})}
  if('letterSpacing'in g)g.letterSpacing='0px';g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;
  let big='';
- if(G.st==='idle')big='TAP TO START\npinch to resize · drag to spin · tap a face to beam';else if(G.st==='over')big='GAME OVER – tap to restart';
+ if(G.st==='idle')big='TAP TO START\npinch to resize · drag to spin · tap a face to beam';else if(G.st==='over')big='GAME OVER'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to restart';else if(G.st==='win')big='THANK YOU FOR PLAYING'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to return to start';
  else if(G.st==='count')big=String(G.cdl);else if(G.st==='rm')big='PHASE '+G.n+' CLEAR'+(G.flaw?' +flawless':'');
  else if(G.pop&&now-G.pop.t<900)big=G.pop.s;
  $('big').textContent=big;
  const bar=(n,m,a,b)=>a.repeat(Math.max(0,n))+b.repeat(Math.max(0,m-n));
- $('t').textContent='SCORE '+G.score+'  BEST '+Math.max(best,G.score)+'\nHP    '+bar(G.hp,CFG.hp,'■','□')+'\nHEAL  '+bar(G.heal,CFG.heal,'█','░')+'\nCOMBO x'+Math.min(5,Math.max(1,G.combo))+'\nPHASE '+G.n+'  '+q.bpm+'bpm\nMOBS LEFT '+(G.st==='play'?q.budget-G.spawned+G.mobs.length:'-');
+ $('t').textContent='SCORE '+G.score+'  BEST '+Math.max(best,G.score)+'\nHP    '+bar(G.hp,CFG.hp,'■','□')+'\nHEAL  '+bar(G.heal,CFG.heal,'█','░')+'\nCOMBO x'+Math.min(5,Math.max(1,G.combo))+'\nPHASE '+G.n+'/'+CFG.maxPhase+'  '+q.bpm+'bpm\nMOBS LEFT '+(G.st==='play'?q.budget-G.spawned+G.mobs.length:'-');
  requestAnimationFrame(frame)}
 fresh();requestAnimationFrame(frame);
 </script></body></html>
