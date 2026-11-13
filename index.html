@@ -17,11 +17,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 #sk,#ht{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));display:none;font:inherit;color:var(--fg);background:none;border:1px solid var(--dim);padding:5px 12px}
 @keyframes pl{50%{background:var(--dim)}}
 #sp.hint{animation:pl 1s infinite}
+#pz{position:fixed;left:10px;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:none;font:inherit;color:var(--fg);background:none;border:1px solid var(--dim);padding:5px 12px}
+#t,#big,#th,#sp,#pv,#sk,#ht,#pz{mix-blend-mode:difference;color:#fff;border-color:#8a8a8a}
 </style></head><body>
-<canvas id="c"></canvas><pre id="t"></pre><div id="big"></div><button id="th">light / dark</button><button id="sp">spin: free</button><button id="pv">view: perspective</button><button id="sk">skip tutorial</button><button id="ht">how to play</button>
+<canvas id="c"></canvas><pre id="t"></pre><div id="big"></div><button id="th">light / dark</button><button id="sp">spin: free</button><button id="pv">view: perspective</button><button id="sk">skip tutorial</button><button id="ht">how to play</button><button id="pz">pause</button>
 <script>
 // ---- CONFIG (tune here) ----
-const CFG={heavy:false,maxPhase:10,hp:10,heal:10,win:2,bpm0:30,bpmStep:3,bpmCap:60,cd:3,rm:3,mobBase:4,mobPer:2,flaw:100,
+const CFG={minCount:2,heavy:false,maxPhase:10,hp:10,heal:10,win:2,bpm0:30,bpmStep:3,bpmCap:60,cd:3,rm:3,mobBase:4,mobPer:2,flaw:100,
  steps:n=>Math.max(4,6-Math.floor(n/4)),   // steps every standard mob walks to reach the core
  heavyExtra:2};                            // heavy mobs walk this many extra steps
 const N=5,C=2,D=14;
@@ -72,7 +74,7 @@ function tick(){if(G.st==='tut'){tutTick();return}
  if(G.st!=='play')return;
  const q=Q(G.n);G.pb++;
  for(const m of G.mobs){m.px=m.x;m.py=m.y;m.pz=m.z;const nx=m.path[m.i+1];if(nx&&!blocked([m.x,m.y,m.z],nx)){m.x=nx[0];m.y=nx[1];m.z=nx[2];m.i++}}
- G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){G.hp--;G.leaks++;G.flash=performance.now();return false}return true});
+ {const nt=performance.now();let n=0;G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){G.hp--;G.leaks++;n++;return false}return true});if(n){G.flash=nt;G.hit={t:nt,n};shakeT=nt;shake=Math.min(16,6+4*n)}}
  if(G.hp<=0){over();return}
  if(G.pb%q.pint===0)movePanels();
  if(G.spawned<q.budget){const k=Math.min(Math.min(1+G.bi,q.peak),q.budget-G.spawned);G.bi++;for(let i=0;i<k;i++)spawn(q.hv);G.spawned+=k}
@@ -115,8 +117,8 @@ cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptr.set(
 cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
  if(ptr.size===2&&(G.st==='idle'||G.st==='tut')){const[a,b]=[...ptr.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pd)zoom=Math.max(.5,Math.min(1.5,zoom*d/pd));pd=d;a.rot=b.rot=true;return}
  if(!p.rot&&Math.hypot(e.clientX-p.sx,e.clientY-p.sy)>9)p.rot=true;
- if(p.rot){spun+=Math.abs(dx)+Math.abs(dy);rot(dx*.008,dy*.008);vel=[dx*.008,dy*.008];lastMove=performance.now()}});
-cv.addEventListener('pointerup',e=>{const p=ptr.get(e.pointerId);ptr.delete(e.pointerId);pd=0;if(!p)return;
+ if(p.rot&&!paused){spun+=Math.abs(dx)+Math.abs(dy);rot(dx*.008,dy*.008);vel=[dx*.008,dy*.008];lastMove=performance.now()}});
+cv.addEventListener('pointerup',e=>{const p=ptr.get(e.pointerId);ptr.delete(e.pointerId);pd=0;if(!p||paused)return;
  if(snap||performance.now()-lastMove>90)vel=[0,0];
  if(!p.rot){if(G.st==='win'||G.st==='over'){if(performance.now()-G.wt>1200){if(G.st==='win')fresh();else begin()}}else if(G.st==='idle')begin();else{const h=pick(e.clientX*dpr,e.clientY*dpr);if(h)fire(h)}}});
 cv.addEventListener('pointercancel',e=>{ptr.delete(e.pointerId);pd=0});
@@ -137,7 +139,7 @@ function enterStep(s){const T=G.tut;T.s=s;T.t=performance.now();T.next=0;T.kills
 function startTut(){const t=performance.now();fresh();G.st='tut';G.tut={s:0,t,next:0,kills:0,multi:false};G.next=t+60000/TB;enterStep(0)}
 function finishTut(){tutSeen=true;try{localStorage.setItem('axotut3','1')}catch(e){}begin()}
 function tutTick(){for(const m of G.mobs){if(m.frz)continue;m.px=m.x;m.py=m.y;m.pz=m.z;const nx=m.path[m.i+1];if(nx&&!blocked([m.x,m.y,m.z],nx)){m.x=nx[0];m.y=nx[1];m.z=nx[2];m.i++}}
- G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){G.flash=performance.now();return false}return true})}
+ G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){G.flash=performance.now();G.hit={t:G.flash,n:1};return false}return true})}
 function tutUpdate(now){const T=G.tut,el=now-T.t;
  if(T.next){if(now>=T.next)enterStep(T.s+1);return}
  const done=()=>{T.next=now+1300};
@@ -147,6 +149,17 @@ function tutUpdate(now){const T=G.tut,el=now-T.t;
  else if(T.s===3||T.s===4){if(!G.mobs.length)done()}
  else if(T.s===5&&el>1800)finishTut()}
 $('sk').addEventListener('click',finishTut);$('ht').addEventListener('click',startTut);
+// ---- mob direction marker: small triangle pointing along the next step (hidden when the step runs along the view axis) ----
+function pointer(m,p,r){const n=m.path[m.i+1],P0=proj(m.x-2,m.y-2,m.z-2),P1=proj(n[0]-2,n[1]-2,n[2]-2),vx=P1[0]-P0[0],vy=P1[1]-P0[1],h=Math.hypot(vx,vy);
+ if(h/(sc*P0[3])<.3)return;
+ const ux=vx/h,uy=vy/h,bx=p[0]+ux*r*1.5,by=p[1]+uy*r*1.5,tx=p[0]+ux*r*2.05,ty=p[1]+uy*r*2.05,nx=-uy*r*.3,ny=ux*r*.3;
+ g.beginPath();g.moveTo(tx,ty);g.lineTo(bx+nx,by+ny);g.lineTo(bx-nx,by-ny);g.closePath();g.fill()}
+// ---- pause ----
+let paused=false,pauseAt=0;
+function shiftTime(dt){G.next+=dt;G.last+=dt;G.flash+=dt;shakeT+=dt;if(G.pop)G.pop.t+=dt;if(G.hit)G.hit.t+=dt;G.beams.forEach(b=>b.t+=dt);FX.forEach(f=>f.t+=dt);if(G.tut){G.tut.t+=dt;if(G.tut.next)G.tut.next+=dt}if(G.wt)G.wt+=dt;G.mobs.forEach(m=>{if(m.hit)m.hit.t+=dt})}
+function setPause(v){const now=performance.now();if(v===paused)return;if(v){if(!['play','count','rm','tut'].includes(G.st))return;paused=true;pauseAt=now;vel=[0,0]}else{shiftTime(now-pauseAt);paused=false}}
+$('pz').addEventListener('click',()=>setPause(!paused));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true)});
 // ---- drawing ----
 function box(x,y,z,h,fa){const c=[];for(let i=0;i<8;i++)c.push(proj(x-2+(i&1?h:-h),y-2+(i&2?h:-h),z-2+(i&4?h:-h)));
  if(fa>0){g.globalAlpha=fa;for(const f of [[0,1,3,2],[4,5,7,6],[0,1,5,4],[2,3,7,6],[0,2,6,4],[1,3,7,5]]){g.beginPath();f.forEach((i,j)=>j?g.lineTo(c[i][0],c[i][1]):g.moveTo(c[i][0],c[i][1]));g.closePath();g.fill()}}
@@ -155,27 +168,34 @@ function frame(){
  const now=performance.now(),q=Q(G.n),per=60000/(G.st==='tut'?TB:q.bpm);dpr=window.devicePixelRatio||1;
  if(cv.width!==Math.round(cv.clientWidth*dpr)||cv.height!==Math.round(cv.clientHeight*dpr)){W=cv.width=Math.round(cv.clientWidth*dpr);H=cv.height=Math.round(cv.clientHeight*dpr)}
  cx0=W/2;cy0=H/2;sc=Math.min(W,H)/8.6*zoom;
- if(now>=G.next){if(now-G.next>2500)G.next=now;G.last=G.next;G.next+=per;tick()}
- if(!ptr.size&&snap)ease();
+ if(!paused&&now>=G.next){if(now-G.next>2500)G.next=now;G.last=G.next;G.next+=per;tick()}
+ if(paused){}else if(!ptr.size&&snap)ease();
  else if(!ptr.size&&(Math.abs(vel[0])>1e-4||Math.abs(vel[1])>1e-4)){rot(vel[0],vel[1]);vel=[vel[0]*.95,vel[1]*.95]}
  G.beams=G.beams.filter(b=>now-b.t<900);
- const fg=getComputedStyle(root).getPropertyValue('--fg').trim();
+ const cs0=getComputedStyle(root),fg=cs0.getPropertyValue('--fg').trim(),bgc=cs0.getPropertyValue('--bg').trim();
  g.clearRect(0,0,W,H);const sh=Math.max(0,1-(now-shakeT)/260)*shake*dpr;g.setTransform(1,0,0,1,(Math.random()-.5)*2*sh,(Math.random()-.5)*2*sh);g.fillStyle=fg;g.strokeStyle=fg;g.lineCap='round';
  const pulse=Math.max(0,1-(now-G.last)/(per*.5));
+ // soft vignette: four eased edge gradients (corners overlap and deepen); swells in over the 35% before the beat, peaks on it, eases out over the next 65%
+ {const u0=Math.min(1,(now-G.last)/per),ev=x=>{const u=x>.65?x-1:x;return u<-.35?0:u<0?Math.pow(Math.sin(Math.PI/2*(u+.35)/.35),2):Math.pow(Math.cos(Math.PI/2*u/.65),2)},e=Math.max(ev(u0),G.hp<=3&&G.st==='play'?.6*ev((u0+.5)%1):0),ah=G.hit?now-G.hit.t:1e9,hh=ah<80?Math.sin(Math.PI/2*ah/80):ah<630?Math.pow(Math.cos(Math.PI/2*(ah-80)/550),2):0,dk=isDark(),
+   rest=(dk?.14:.18)+.02*Math.min(5,G.combo)+.12*(1-Math.max(0,G.hp)/CFG.hp),peak=dk?.5:.6,lv=Math.max(rest+(peak-rest)*e,hh*(dk?.8:.95)),bd=Math.min(W,H)*.3*(1+.5*hh),
+   cc=fg.replace('#',''),f6=cc.length===3?cc.split('').map(x=>x+x).join(''):cc,rgb=[0,2,4].map(i=>parseInt(f6.substr(i,2),16)).join(',');
+  const edge=(x0,y0,x1,y1,rx,ry,rw,rh)=>{const gr=g.createLinearGradient(x0,y0,x1,y1);for(let i=0;i<=8;i++)gr.addColorStop(i/8,'rgba('+rgb+','+Math.pow(1-i/8,2.4).toFixed(3)+')');g.fillStyle=gr;g.fillRect(rx,ry,rw,rh)};
+  g.globalAlpha=lv;edge(0,0,bd,0,0,0,bd,H);edge(W,0,W-bd,0,W-bd,0,bd,H);edge(0,0,0,bd,0,0,W,bd);edge(0,H,0,H-bd,0,H-bd,W,bd);g.fillStyle=fg}
  for(let ax=0;ax<3;ax++)for(let a=0;a<=N;a++)for(let b=0;b<=N;b++){
   const p=[0,0,0],r=[0,0,0],u=(ax+1)%3,v=(ax+2)%3;p[ax]=-2.5;r[ax]=2.5;p[u]=r[u]=a-2.5;p[v]=r[v]=b-2.5;
   const A=proj(...p),B=proj(...r),dn=((A[2]+B[2])/2+4.4)/8.8,e=(a%N==0)+(b%N==0);
-  g.globalAlpha=(e==2?.9:e==1?.3:.08)*(.45+.55*dn);g.lineWidth=(e==2?2+2*pulse:e==1?1:.7)*dpr;
+  g.globalAlpha=(e==2?.9:e==1?.3:.08)*(.45+.55*dn);g.lineWidth=(e==2?2.2:e==1?1:.7)*dpr;
   g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke()}
  g.lineWidth=1.5*dpr;
  const te0=Math.min(1,(now-G.last)/(per*.7)),te=te0*te0*(3-2*te0);
  for(const p of G.pan){const f=p.f,u=(f+1)%3,v=(f+2)%3,pts=[[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]].map(([a,b])=>{const w=[0,0,0];w[f]=p.b-2.5;w[u]=p.pc[0]+(p.c[0]-p.pc[0])*te-2+a;w[v]=p.pc[1]+(p.c[1]-p.pc[1])*te-2+b;return proj(...w)});
   g.beginPath();pts.forEach((s,i)=>i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1]));g.closePath();g.globalAlpha=.3;g.fill();g.globalAlpha=1;g.lineWidth=2*dpr;g.stroke()}
  g.lineWidth=1.5*dpr;box(C,C,C,.28,now-G.flash<220?.8:0);
+ if(G.hit){const a=now-G.hit.t;if(a<520){const p=a/520,K=proj(0,0,0);g.globalAlpha=(1-p)*.9;g.lineWidth=(3.5-2*p)*dpr;g.beginPath();g.arc(K[0],K[1],sc*K[3]*(.35+2.4*(1-Math.pow(1-p,3))),0,7);g.stroke();g.globalAlpha=1}}
  const tt=Math.min(1,(now-G.last)/(per*.3)),L=G.mobs.map(m=>({m,p:proj(m.px+(m.x-m.px)*tt-2,m.py+(m.y-m.py)*tt-2,m.pz+(m.z-m.pz)*tt-2)})).sort((a,b)=>a.p[2]-b.p[2]);
  for(const{m,p}of L){const r=sc*p[3]*.24;g.globalAlpha=.16+.84*(m.i/m.S);g.lineWidth=2*dpr;   // pale = far from core, dark = about to leak
   if(m.h){const z=r*1.5,pr=m.hit&&now-m.hit.t<=CFG.win*per;if(pr&&Math.floor(now/110)%2)g.fillRect(p[0]-z,p[1]-z,2*z,2*z);else{g.strokeRect(p[0]-z,p[1]-z,2*z,2*z);g.fillRect(p[0]-r*.5,p[1]-r*.5,r,r)}}
-  else g.fillRect(p[0]-r,p[1]-r,2*r,2*r)}
+  else g.fillRect(p[0]-r,p[1]-r,2*r,2*r);if(!m.frz&&m.path[m.i+1])pointer(m,p,r)}
  for(const b of G.beams){let a=1-(now-b.t)/900;a*=a;const s0=b.w.slice(),s1=b.w.slice();s0[b.ax]=b.a;s1[b.ax]=b.b;const A=proj(...s0),B=proj(...s1),w=sc*A[3];
   g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);
   for(const[wd,al]of[[1.1,.05],[.8,.07],[.55,.1],[.32,.16]]){g.globalAlpha=a*al;g.lineWidth=w*wd;g.stroke()}
@@ -183,6 +203,15 @@ function frame(){
   const ra=Math.max(0,1-(now-b.t)/350);
   if(ra>0)for(const k of b.k){const P=proj(...k),rr=w*(.5+.9*(1-ra)),gr=g.createRadialGradient(P[0],P[1],0,P[0],P[1],rr);gr.addColorStop(0,fg);gr.addColorStop(1,fg+'0');g.globalAlpha=ra*.7;g.fillStyle=gr;g.beginPath();g.arc(P[0],P[1],rr,0,7);g.fill()}
   g.fillStyle=fg}
+ {let a=0;for(let i=1;i<3;i++)if(Math.abs(R[2][i])>Math.abs(R[2][a]))a=i;
+  const al=Math.min(1,Math.max(0,(Math.abs(R[2][a])-.93)/.05));
+  if(al>0&&G.mobs.length){const sgn=R[2][a]>0?1:-1,sg=-sgn,u=(a+1)%3,v=(a+2)%3,occ={};for(const m of G.mobs){const k=m.x+','+m.y+','+m.z;occ[k]=(occ[k]||0)+1}
+   g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';
+   for(let i=0;i<N;i++)for(let j=0;j<N;j++){let n=0,prev=null;
+    for(let t=0;t<N;t++){const c=[0,0,0];c[a]=sg>0?t:N-1-t;c[u]=i;c[v]=j;if(prev&&blocked(prev,c))break;n+=occ[c.join()]||0;prev=c}
+    if(n<CFG.minCount)continue;const w=[0,0,0];w[a]=sgn*2.5;w[u]=i-2;w[v]=j-2;const P=proj(...w);
+    g.font='700 '+sc*P[3]*.26+'px ui-monospace,Menlo,monospace';g.globalAlpha=al;g.lineWidth=3*dpr;g.strokeStyle=bgc;g.strokeText(n,P[0],P[1]);g.fillStyle=fg;g.fillText(n,P[0],P[1])}
+   g.strokeStyle=fg;g.globalAlpha=1}}
  if(G.st==='tut'&&G.tut.s===2&&now-G.tut.t>16000&&G.mobs.length===3){const A=proj(-1,1,-2.5),B=proj(-1,1,2.5);g.setLineDash([6*dpr,8*dpr]);g.globalAlpha=.35+.25*Math.sin(now/300);g.lineWidth=2*dpr;g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke();g.setLineDash([])}
  FX=FX.filter(f=>now-f.t<1200);
  const bg=getComputedStyle(root).getPropertyValue('--bg').trim();g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';if('letterSpacing'in g)g.letterSpacing=(2*dpr)+'px';
@@ -193,7 +222,7 @@ function frame(){
  if(G.st==='idle')big='TAP TO START\npinch to resize · drag to spin · tap a face to beam';else if(G.st==='over')big='GAME OVER'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to restart';else if(G.st==='win')big='THANK YOU FOR PLAYING'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to return to start';
  else if(G.st==='count')big=String(G.cdl);else if(G.st==='rm')big='PHASE '+G.n+' CLEAR'+(G.flaw?' +flawless':'');
  else if(G.pop&&now-G.pop.t<900)big=G.pop.s;
- if(G.st==='tut')tutUpdate(now);if(G.st==='tut')big=G.tut.next?'Nice!':PR[G.tut.s];$('big').textContent=big;$('sk').style.display=G.st==='tut'?'block':'none';$('ht').style.display=G.st==='idle'?'block':'none';$('sp').classList.toggle('hint',G.st==='tut'&&G.tut.s===2&&now-G.tut.t>8000);
+ if(G.st==='tut'&&!paused)tutUpdate(now);if(G.st==='tut')big=G.tut.next?'Nice!':PR[G.tut.s];if(paused)big='PAUSED';$('big').textContent=big;$('sk').style.display=G.st==='tut'?'block':'none';$('pz').style.display=(G.st==='play'||G.st==='count'||G.st==='rm'||G.st==='tut')?'block':'none';$('pz').textContent=paused?'resume':'pause';$('ht').style.display=G.st==='idle'?'block':'none';$('sp').classList.toggle('hint',G.st==='tut'&&G.tut.s===2&&now-G.tut.t>8000);
  const bar=(n,m,a,b)=>a.repeat(Math.max(0,n))+b.repeat(Math.max(0,m-n));
  $('t').textContent=G.st==='tut'?'TUTORIAL '+Math.min(5,G.tut.s+1)+'/5':'SCORE '+G.score+'  BEST '+Math.max(best,G.score)+'\nHP    '+bar(G.hp,CFG.hp,'■','□')+'\nHEAL  '+bar(G.heal,CFG.heal,'█','░')+'\nCOMBO x'+Math.min(5,Math.max(1,G.combo))+'\nPHASE '+G.n+'/'+CFG.maxPhase+'  '+q.bpm+'bpm\nMOBS LEFT '+(G.st==='play'?q.budget-G.spawned+G.mobs.length:'-');
  requestAnimationFrame(frame)}
