@@ -18,12 +18,14 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:b
 @keyframes pl{50%{background:var(--dim)}}
 #sp.hint{animation:pl 1s infinite}
 #pz{position:fixed;left:10px;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:none;font:inherit;color:var(--fg);background:none;border:1px solid var(--dim);padding:5px 12px}
-#t,#big,#th,#sp,#pv,#sk,#ht,#pz{mix-blend-mode:difference;color:#fff;border-color:#8a8a8a}
+#ct,#mn{position:fixed;left:50%;transform:translateX(-50%);display:none;font:inherit;background:none;border:1px solid var(--dim);padding:6px 14px}
+#ct{bottom:calc(58px + env(safe-area-inset-bottom,0px))}#mn{bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+#t,#big,#th,#sp,#pv,#sk,#ht,#pz,#ct,#mn{mix-blend-mode:difference;color:#fff;border-color:#8a8a8a}
 </style></head><body>
-<canvas id="c"></canvas><pre id="t"></pre><div id="big"></div><button id="th">light / dark</button><button id="sp">spin: free</button><button id="pv">view: perspective</button><button id="sk">skip tutorial</button><button id="ht">how to play</button><button id="pz">pause</button>
+<canvas id="c"></canvas><pre id="t"></pre><div id="big"></div><button id="th">light / dark</button><button id="sp">spin: free</button><button id="pv">view: perspective</button><button id="sk">skip tutorial</button><button id="ht">how to play</button><button id="pz">pause</button><button id="ct">continue to untested territory</button><button id="mn">menu</button>
 <script>
 // ---- CONFIG (tune here) ----
-const CFG={minCount:2,heavy:false,maxPhase:10,hp:10,heal:10,win:2,bpm0:30,bpmStep:3,bpmCap:60,cd:3,rm:3,mobBase:4,mobPer:2,flaw:100,
+const CFG={minCount:2,heavy:false,maxPhase:10,endPhase:30,hp:10,heal:10,win:2,bpm0:30,bpmStep:3,bpmCap:60,cd:3,rm:3,mobBase:4,mobPer:2,flaw:100,
  steps:n=>Math.max(4,6-Math.floor(n/4)),   // steps every standard mob walks to reach the core
  heavyExtra:2};                            // heavy mobs walk this many extra steps
 const N=5,C=2,D=14;
@@ -46,13 +48,14 @@ function ease(){let b=null,bs=-9;for(const T of TS){let s=0;for(let i=0;i<3;i++)
 let W,H,sc,cx0,cy0,dpr=1,ortho=false;
 const proj=(x,y,z)=>{const a=R[0][0]*x+R[0][1]*y+R[0][2]*z,b=R[1][0]*x+R[1][1]*y+R[1][2]*z,c=R[2][0]*x+R[2][1]*y+R[2][2]*z,k=ortho?1:D/(D-c);return[cx0+a*sc*k,cy0-b*sc*k,c,k]};
 // ---- game state ----
-const Q=n=>({bpm:Math.min(CFG.bpmCap,CFG.bpm0+CFG.bpmStep*n),budget:CFG.mobBase+CFG.mobPer*n,peak:Math.min(4,1+(n>>2)),np:Math.min(3,(n-1)>>1),pint:1,hv:CFG.heavy&&n>=4?Math.min(.25,.04*(n-3)):0,S:CFG.steps(n)});
+const Q=n=>({bpm:Math.min(CFG.bpmCap,CFG.bpm0+CFG.bpmStep*n),budget:CFG.mobBase+CFG.mobPer*Math.min(n,10),peak:Math.min(4,1+(Math.min(n,10)>>2)),np:Math.min(3,(n-1)>>1),pint:1,hv:CFG.heavy&&n>=4?Math.min(.25,.04*(n-3)):0,S:CFG.steps(n)});
 let G;
 const dist=(x,y,z)=>Math.abs(x-C)+Math.abs(y-C)+Math.abs(z-C);
 // A panel is a flat 1x1 tile lying between two cell layers (boundary b on axis f), sitting at cell c=[u,v].
 function blocked(a,b){for(const p of G.pan){const f=p.f;if(a[f]===b[f]||Math.min(a[f],b[f])+1!==p.b)continue;const u=(f+1)%3,v=(f+2)%3;if(a[u]===p.c[0]&&a[v]===p.c[1]&&b[u]===a[u]&&b[v]===a[v])return true}return false}
 function fresh(){const t=performance.now();G={st:'idle',n:1,hp:CFG.hp,score:0,combo:0,heal:0,mobs:[],pan:[],last:t,next:t+900,cdl:0,spawned:0,bi:0,pb:0,leaks:0,rm:0,beams:[],pop:null,flash:0,flaw:false}}
-function startPhase(){const q=Q(G.n);G.spawned=0;G.bi=0;G.pb=0;G.leaks=0;G.mobs=[];G.pan=[];
+function startPhase(){const q=Q(G.n);if(INTRO[G.n]&&G.introFor!==G.n){startIntro(INTRO[G.n]);return}G.spawned=0;G.bi=0;G.pb=0;G.leaks=0;G.mobs=[];G.pan=[];G.sp={};
+ {const ns=G.n<11?0:G.n<=25?[2,3,3,4,4][(G.n-11)%5]:4+(G.n-26);for(let c=0;c<ns;c++){let ix;do{ix=3+rnd(q.budget-3)}while(G.sp[ix]);G.sp[ix]=G.n<=15?'split':G.n<=20?'shield':G.n<=25?'sprint':['split','shield','sprint'][(c+G.n)%3]}}
  for(let i=0;i<q.np;i++){const c=[rnd(N),rnd(N)];G.pan.push({f:[1,0,2][i],b:1+rnd(4),c,pc:c.slice()})}
  G.st='count';G.cdl=CFG.cd}
 function begin(){const t=performance.now();fresh();G.next=t+60000/Q(1).bpm;startPhase()}
@@ -64,22 +67,46 @@ const DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 function mkpath(s,S){const P=[s.slice()];let c=s;for(let r=S;r>0;r--){const v=[];
  for(const d of DIRS){const x=c[0]+d[0],y=c[1]+d[1],z=c[2]+d[2];if(x<0||y<0||z<0||x>=N||y>=N||z>=N)continue;const dd=dist(x,y,z);if(dd<=r-1&&(r-1-dd)%2===0&&(dd>0||r===1))v.push([x,y,z])}
  c=v[rnd(v.length)];P.push(c)}return P}
-function spawn(hv){const S=Q(G.n).S+(Math.random()<hv?CFG.heavyExtra:0),h=S>Q(G.n).S,L=[];
+function spawn(hv,t){const S=Q(G.n).S+(Math.random()<hv?CFG.heavyExtra:0),h=S>Q(G.n).S,L=[];
  for(let x=0;x<N;x++)for(let y=0;y<N;y++)for(let z=0;z<N;z++)if((x==0||y==0||z==0||x==N-1||y==N-1||z==N-1)&&(x+y+z)%2===S%2&&dist(x,y,z)<=S)L.push([x,y,z]);
- const s=L[rnd(L.length)];G.mobs.push({x:s[0],y:s[1],z:s[2],px:s[0],py:s[1],pz:s[2],h,S,i:0,path:mkpath(s,S),hit:null})}
+ const s=L[rnd(L.length)];G.mobs.push({x:s[0],y:s[1],z:s[2],px:s[0],py:s[1],pz:s[2],h,S,i:0,path:mkpath(s,S),hit:null,t:t||'n',sh:t==='shield',pts:PT[t||'n'],mt:performance.now()})}
 function movePanels(){for(const p of G.pan){p.pc=p.c.slice();const d=rnd(2),c=p.c.slice();c[d]+=rnd(2)?1:-1;if(c[d]<0||c[d]>=N||G.pan.some(o=>o!==p&&o.f===p.f&&o.b===p.b&&o.c.join()===c.join()))continue;p.c=c}}
 function tick(){if(G.st==='tut'){tutTick();return}
  if(G.st==='count'){if(--G.cdl>0)return;G.st='play'}
  else if(G.st==='rm'){if(--G.rm<=0){G.n++;startPhase()}return}
  if(G.st!=='play')return;
  const q=Q(G.n);G.pb++;
- for(const m of G.mobs){m.px=m.x;m.py=m.y;m.pz=m.z;const nx=m.path[m.i+1];if(nx&&!blocked([m.x,m.y,m.z],nx)){m.x=nx[0];m.y=nx[1];m.z=nx[2];m.i++}}
- {const nt=performance.now();let n=0;G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){G.hp--;G.leaks++;n++;return false}return true});if(n){G.flash=nt;G.hit={t:nt,n};shakeT=nt;shake=Math.min(16,6+4*n)}}
- if(G.hp<=0){over();return}
+ for(const m of G.mobs)stepMob(m);leaks();if(G.st!=='play')return;
  if(G.pb%q.pint===0)movePanels();
- if(G.spawned<q.budget){const k=Math.min(Math.min(1+G.bi,q.peak),q.budget-G.spawned);G.bi++;for(let i=0;i<k;i++)spawn(q.hv);G.spawned+=k}
- if(G.spawned>=q.budget&&!G.mobs.length){G.flaw=G.leaks==0;if(G.flaw){G.score+=CFG.flaw*G.n;G.hp=Math.min(CFG.hp,G.hp+1)}if(G.n>=CFG.maxPhase)won();else{G.st='rm';G.rm=CFG.rm}}
+ if(G.spawned<q.budget){const k=Math.min(Math.min(1+G.bi,q.peak),q.budget-G.spawned);G.bi++;for(let i=0;i<k;i++)spawn(q.hv,G.sp&&G.sp[G.spawned+i]);G.spawned+=k}
+ if(G.spawned>=q.budget&&!G.mobs.length){G.flaw=G.leaks==0;if(G.flaw){G.score+=CFG.flaw*G.n;G.hp=Math.min(CFG.hp,G.hp+1)}if(G.n===CFG.maxPhase)won();else if(G.n>=CFG.endPhase)ended();else{G.st='rm';G.rm=CFG.rm}}
 }
+// ---- special mobs: splitter, shielded, sprinter; intro tutorials ----
+const PT={n:10,split:15,sprint:15,shield:20},INTRO={11:'split',16:'shield',21:'sprint'};
+const PRI={split:'Splitters break in two when shot.\nKill both pieces.',shield:'Shielded mobs are protected in front\nand on both sides.\nShoot from behind, above or below.',sprint:'Sprinters move twice per beat.\nShoot before it arrives.'};
+let FG='#111',BG='#fff';
+function stepMob(m){m.px=m.x;m.py=m.y;m.pz=m.z;m.mt=performance.now();const nx=m.path[m.i+1];if(nx&&!blocked([m.x,m.y,m.z],nx)){m.x=nx[0];m.y=nx[1];m.z=nx[2];m.i++}}
+function leaks(){const nt=performance.now();let n=0;
+ G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){if(G.st!=='tut'){G.hp--;G.leaks++}n++;return false}return true});
+ if(n){G.flash=nt;G.hit={t:nt,n};if(G.st!=='tut'){shakeT=nt;shake=Math.min(16,6+4*n)}}
+ if(G.hp<=0&&G.st==='play')over()}
+function halfTick(){for(const m of G.mobs)if(m.t==='sprint'&&!m.frz)stepMob(m);leaks()}
+// shield: strong in front and on both sides, weak from behind, above and below
+function vuln(m,ax,sg){const n=m.path[m.i+1];if(!n)return true;const d=[n[0]-m.x,n[1]-m.y,n[2]-m.z],h=d.findIndex(v=>v!==0);if(h<0)return true;
+ if(ax===h)return sg===d[h];return ax===(h===1?2:1)}
+// splitter children keep the parent's step count and carry on along fresh routes to the core
+function kids(m){const r=m.S-m.i;if(r<=1)return[];const out=[];
+ for(let k=0;k<2;k++)out.push({x:m.x,y:m.y,z:m.z,px:m.x,py:m.y,pz:m.z,h:false,t:'n',small:true,pts:5,S:m.S,i:m.i,path:m.path.slice(0,m.i).concat(mkpath([m.x,m.y,m.z],r)),hit:null,mt:performance.now()});return out}
+function hd(m){const n=m.path[m.i+1];if(!n)return null;const P0=proj(m.x-2,m.y-2,m.z-2),P1=proj(n[0]-2,n[1]-2,n[2]-2),vx=P1[0]-P0[0],vy=P1[1]-P0[1],h=Math.hypot(vx,vy);return{ux:h?vx/h:0,uy:h?vy/h:0,ln:h/(sc*P0[3]),tw:P1[2]-P0[2]}}
+function drawMob(m,p,r){const q=m.small?r*.65:r,d=hd(m);
+ if(m.t==='sprint'&&d&&d.ln>=.3){g.save();g.translate(p[0],p[1]);g.rotate(Math.atan2(d.uy,d.ux));g.fillRect(-q*1.45,-q*.7,q*2.9,q*1.4);g.restore();return}
+ g.fillRect(p[0]-q,p[1]-q,2*q,2*q);
+ if(m.t==='split'){g.fillStyle=BG;g.fillRect(p[0]-q*.1,p[1]-q-1,q*.2,2*q+2);g.fillStyle=FG}
+ if(m.sh&&d){g.lineWidth=2.4*dpr;g.beginPath();if(d.ln>=.3){const a=Math.atan2(d.uy,d.ux);g.arc(p[0],p[1],q*1.95,a-Math.PI*.58,a+Math.PI*.58)}else if(d.tw>0)g.arc(p[0],p[1],q*1.95,0,7);g.stroke()}}
+function setupI(k){if(k==='split')addMob([0,0,0],6,0,0,'split');if(k==='shield')addMob([0,2,2],2,1,0,'shield',[[0,2,2],[1,2,2],[2,2,2]]);if(k==='sprint')addMob([4,2,0],4,0,0,'sprint')}
+function startIntro(k){const t=performance.now();G.st='tut';G.tut={kind:k,s:0,t,next:0,kills:0,multi:false,hint:k==='shield'?[[-2,-2.5,0],[-2,2.5,0]]:null};G.next=t+60000/TB;G.last=t;G.hd=true;enterStep(0)}
+function finishIntro(){G.introFor=G.n;G.tut=null;const t=performance.now();G.last=t;G.next=t+60000/Q(G.n).bpm;startPhase()}
+function ended(){G.st='end';G.wt=performance.now();save()}
 // ---- picking: ray through the tap hits the nearest cube face ----
 function pick(sx,sy){const ux=(sx-cx0)/sc,uy=-(sy-cy0)/sc;
  const O=[0,1,2].map(i=>ortho?ux*R[0][i]+uy*R[1][i]+D*R[2][i]:D*R[2][i]),V=[0,1,2].map(i=>ortho?-R[2][i]:ux/D*R[0][i]+uy/D*R[1][i]-R[2][i]);
@@ -92,11 +119,13 @@ function fire(p){
  if(!(G.st==='play'||G.st==='count'||G.st==='rm'||G.st==='tut'))return;
  const ax=p.ax,sg=p.sg,cells=[];let end=sg*2.5,prev=null;
  for(let i=0;i<N;i++){const c=p.h.slice();c[ax]=sg>0?i:N-1-i;if(prev&&blocked(prev,c)){end=(prev[ax]+c[ax])/2-2;break}cells.push(c);prev=c}
- const now=performance.now(),set=new Set(cells.map(c=>c.join())),win=CFG.win*60000/Q(G.n).bpm,kp=[];let kills=0,base=0,hits=0;
+ const now=performance.now(),set=new Set(cells.map(c=>c.join())),win=CFG.win*60000/Q(G.n).bpm,kp=[],blk=[],born=[];let kills=0,base=0,hits=0;
  G.mobs=G.mobs.filter(m=>{if(!set.has([m.x,m.y,m.z].join()))return true;hits++;
-  if(!m.h){kills++;base+=10;kp.push([m.x-2,m.y-2,m.z-2]);return false}
+  if(m.sh&&!vuln(m,ax,sg)){blk.push([m.x-2,m.y-2,m.z-2]);return true}
+  if(!m.h){kills++;base+=m.pts||10;kp.push([m.x-2,m.y-2,m.z-2]);if(m.t==='split')born.push(...kids(m));return false}
   if(m.hit&&m.hit.ax!==ax&&now-m.hit.t<=win){kills++;base+=20;kp.push([m.x-2,m.y-2,m.z-2]);return false}
   m.hit={ax,t:now};return true});
+ G.mobs.push(...born);blk.forEach(c=>FX.push({t:now,c,L:[{s:'BLOCKED',z:13}]}));
  G.beams.push({ax,w:p.h.map(v=>v-2),a:-sg*2.5,b:end,t:now,k:kp});
  if(G.st==='tut'){G.tut.kills+=kills;if(kills>=3)G.tut.multi=true}
  if(kills){G.combo++;const mult=Math.min(5,G.combo),bn=kills>=8?1:kills>=5?.5:kills>=3?.25:0,bb=Math.min(Math.abs(now-G.last),Math.abs(G.next-now))<110?.1:0;
@@ -120,7 +149,7 @@ cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;
  if(p.rot&&!paused){spun+=Math.abs(dx)+Math.abs(dy);rot(dx*.008,dy*.008);vel=[dx*.008,dy*.008];lastMove=performance.now()}});
 cv.addEventListener('pointerup',e=>{const p=ptr.get(e.pointerId);ptr.delete(e.pointerId);pd=0;if(!p||paused)return;
  if(snap||performance.now()-lastMove>90)vel=[0,0];
- if(!p.rot){if(G.st==='win'||G.st==='over'){if(performance.now()-G.wt>1200){if(G.st==='win')fresh();else begin()}}else if(G.st==='idle')begin();else{const h=pick(e.clientX*dpr,e.clientY*dpr);if(h)fire(h)}}});
+ if(!p.rot){if(G.st==='end'||G.st==='over'){if(performance.now()-G.wt>1200){if(G.st==='end')fresh();else begin()}}else if(G.st==='win'){}else if(G.st==='idle')begin();else{const h=pick(e.clientX*dpr,e.clientY*dpr);if(h)fire(h)}}});
 cv.addEventListener('pointercancel',e=>{ptr.delete(e.pointerId);pd=0});
 cv.addEventListener('wheel',e=>{if(G.st==='idle'){e.preventDefault();zoom=Math.max(.5,Math.min(1.5,zoom*Math.exp(-e.deltaY*.001)))}},{passive:false});
 $('sp').addEventListener('click',()=>{snap=!snap;vel=[0,0];$('sp').textContent='spin: '+(snap?'snap':'free')});
@@ -129,26 +158,30 @@ $('th').addEventListener('click',()=>{root.dataset.theme=isDark()?'light':'dark'
 // ---- tutorial: scripted first run on the real engine (slow beat, core can't be hurt) ----
 const TB=30,PR=['Drag to spin the cube.','Tap a face to fire a beam.','Spin until they line up,\nthen tap.','Dark mobs are close to the core.\nShoot those first.','Panels stop beams.\nReach the mob behind it.',"You're ready."];
 let tutSeen=false,spun=0;try{tutSeen=localStorage.getItem('axotut3')==='1'}catch(e){}
-function addMob(s,S,frz,adv){const path=mkpath(s,S),i=adv||0,c=path[i];G.mobs.push({x:c[0],y:c[1],z:c[2],px:c[0],py:c[1],pz:c[2],h:false,S,i,path,hit:null,frz})}
-function setup(s){
+function addMob(s,S,frz,adv,t,po){const path=po||mkpath(s,S),i=adv||0,c=path[i];G.mobs.push({x:c[0],y:c[1],z:c[2],px:c[0],py:c[1],pz:c[2],h:false,S,i,path,hit:null,frz,t:t||'n',sh:t==='shield',pts:PT[t||'n'],mt:performance.now()})}
+function setup(s){if(G.tut.kind){if(s===0)setupI(G.tut.kind);return}
  if(s===1)addMob([4,2,0],4);
  if(s===2){G.mobs=[];[0,2,4].forEach(z=>addMob([1,3,z],6,1))}
  if(s===3){addMob([4,2,0],4);addMob([0,4,4],6,0,4)}
  if(s===4){G.pan=[{f:1,b:2,c:[3,3],pc:[3,3]}];addMob([3,4,3],6,1);addMob([3,0,3],6,1)}}
 function enterStep(s){const T=G.tut;T.s=s;T.t=performance.now();T.next=0;T.kills=0;T.multi=false;G.mobs=[];G.pan=[];G.beams=[];spun=0;setup(s)}
 function startTut(){const t=performance.now();fresh();G.st='tut';G.tut={s:0,t,next:0,kills:0,multi:false};G.next=t+60000/TB;enterStep(0)}
-function finishTut(){tutSeen=true;try{localStorage.setItem('axotut3','1')}catch(e){}begin()}
-function tutTick(){for(const m of G.mobs){if(m.frz)continue;m.px=m.x;m.py=m.y;m.pz=m.z;const nx=m.path[m.i+1];if(nx&&!blocked([m.x,m.y,m.z],nx)){m.x=nx[0];m.y=nx[1];m.z=nx[2];m.i++}}
- G.mobs=G.mobs.filter(m=>{if(m.i>=m.S){G.flash=performance.now();G.hit={t:G.flash,n:1};return false}return true})}
+function finishTut(){if(G.st==='tut'&&G.tut&&G.tut.kind){finishIntro();return}tutSeen=true;try{localStorage.setItem('axotut3','1')}catch(e){}begin()}
+function tutTick(){for(const m of G.mobs){if(!m.frz)stepMob(m)}leaks()}
 function tutUpdate(now){const T=G.tut,el=now-T.t;
  if(T.next){if(now>=T.next)enterStep(T.s+1);return}
+ if(T.kind){const d0=()=>{T.next=now+1300};
+  if(T.s===1){if(el>1400)finishIntro()}
+  else if(T.kind==='split'){if(T.kills>=3&&!G.mobs.length)d0();else if(!G.mobs.length){T.kills=0;setup(0)}}
+  else if(T.kills>0)d0();else if(!G.mobs.length)setup(0);
+  return}
  const done=()=>{T.next=now+1300};
  if(T.s===0){if(spun>260)done()}
  else if(T.s===1){if(T.kills>0)done();else if(!G.mobs.length)setup(1)}
  else if(T.s===2){if(T.multi)done();else if(G.mobs.length<3)setup(2)}
  else if(T.s===3||T.s===4){if(!G.mobs.length)done()}
  else if(T.s===5&&el>1800)finishTut()}
-$('sk').addEventListener('click',finishTut);$('ht').addEventListener('click',startTut);
+$('sk').addEventListener('click',finishTut);$('ct').addEventListener('click',()=>{if(G.st!=='win')return;G.cont=true;G.n++;startPhase()});$('mn').addEventListener('click',()=>{if(G.st==='win')fresh()});$('ht').addEventListener('click',startTut);
 // ---- mob direction marker: small triangle pointing along the next step (hidden when the step runs along the view axis) ----
 function pointer(m,p,r){const n=m.path[m.i+1],P0=proj(m.x-2,m.y-2,m.z-2),P1=proj(n[0]-2,n[1]-2,n[2]-2),vx=P1[0]-P0[0],vy=P1[1]-P0[1],h=Math.hypot(vx,vy);
  if(h/(sc*P0[3])<.3)return;
@@ -168,11 +201,12 @@ function frame(){
  const now=performance.now(),q=Q(G.n),per=60000/(G.st==='tut'?TB:q.bpm);dpr=window.devicePixelRatio||1;
  if(cv.width!==Math.round(cv.clientWidth*dpr)||cv.height!==Math.round(cv.clientHeight*dpr)){W=cv.width=Math.round(cv.clientWidth*dpr);H=cv.height=Math.round(cv.clientHeight*dpr)}
  cx0=W/2;cy0=H/2;sc=Math.min(W,H)/8.6*zoom;
- if(!paused&&now>=G.next){if(now-G.next>2500)G.next=now;G.last=G.next;G.next+=per;tick()}
+ if(!paused&&now>=G.next){if(now-G.next>2500)G.next=now;G.last=G.next;G.next+=per;G.hd=false;tick()}
+ if(!paused&&!G.hd&&now>=G.last+per/2&&(G.st==='play'||G.st==='tut')){G.hd=true;halfTick()}
  if(paused){}else if(!ptr.size&&snap)ease();
  else if(!ptr.size&&(Math.abs(vel[0])>1e-4||Math.abs(vel[1])>1e-4)){rot(vel[0],vel[1]);vel=[vel[0]*.95,vel[1]*.95]}
  G.beams=G.beams.filter(b=>now-b.t<900);
- const cs0=getComputedStyle(root),fg=cs0.getPropertyValue('--fg').trim(),bgc=cs0.getPropertyValue('--bg').trim();
+ const cs0=getComputedStyle(root),fg=cs0.getPropertyValue('--fg').trim(),bgc=cs0.getPropertyValue('--bg').trim();FG=fg;BG=bgc;
  g.clearRect(0,0,W,H);const sh=Math.max(0,1-(now-shakeT)/260)*shake*dpr;g.setTransform(1,0,0,1,(Math.random()-.5)*2*sh,(Math.random()-.5)*2*sh);g.fillStyle=fg;g.strokeStyle=fg;g.lineCap='round';
  const pulse=Math.max(0,1-(now-G.last)/(per*.5));
  // soft vignette: four eased edge gradients (corners overlap and deepen); swells in over the 35% before the beat, peaks on it, eases out over the next 65%
@@ -192,10 +226,10 @@ function frame(){
   g.beginPath();pts.forEach((s,i)=>i?g.lineTo(s[0],s[1]):g.moveTo(s[0],s[1]));g.closePath();g.globalAlpha=.3;g.fill();g.globalAlpha=1;g.lineWidth=2*dpr;g.stroke()}
  g.lineWidth=1.5*dpr;box(C,C,C,.28,now-G.flash<220?.8:0);
  if(G.hit){const a=now-G.hit.t;if(a<520){const p=a/520,K=proj(0,0,0);g.globalAlpha=(1-p)*.9;g.lineWidth=(3.5-2*p)*dpr;g.beginPath();g.arc(K[0],K[1],sc*K[3]*(.35+2.4*(1-Math.pow(1-p,3))),0,7);g.stroke();g.globalAlpha=1}}
- const tt=Math.min(1,(now-G.last)/(per*.3)),L=G.mobs.map(m=>({m,p:proj(m.px+(m.x-m.px)*tt-2,m.py+(m.y-m.py)*tt-2,m.pz+(m.z-m.pz)*tt-2)})).sort((a,b)=>a.p[2]-b.p[2]);
+ const L=G.mobs.map(m=>{const tt=Math.min(1,(now-(m.mt||0))/(per*.3));return{m,p:proj(m.px+(m.x-m.px)*tt-2,m.py+(m.y-m.py)*tt-2,m.pz+(m.z-m.pz)*tt-2)}}).sort((a,b)=>a.p[2]-b.p[2]);
  for(const{m,p}of L){const r=sc*p[3]*.24;g.globalAlpha=.16+.84*(m.i/m.S);g.lineWidth=2*dpr;   // pale = far from core, dark = about to leak
   if(m.h){const z=r*1.5,pr=m.hit&&now-m.hit.t<=CFG.win*per;if(pr&&Math.floor(now/110)%2)g.fillRect(p[0]-z,p[1]-z,2*z,2*z);else{g.strokeRect(p[0]-z,p[1]-z,2*z,2*z);g.fillRect(p[0]-r*.5,p[1]-r*.5,r,r)}}
-  else g.fillRect(p[0]-r,p[1]-r,2*r,2*r);if(!m.frz&&m.path[m.i+1])pointer(m,p,r)}
+  else drawMob(m,p,r);if(!m.frz&&m.path[m.i+1])pointer(m,p,r)}
  for(const b of G.beams){let a=1-(now-b.t)/900;a*=a;const s0=b.w.slice(),s1=b.w.slice();s0[b.ax]=b.a;s1[b.ax]=b.b;const A=proj(...s0),B=proj(...s1),w=sc*A[3];
   g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);
   for(const[wd,al]of[[1.1,.05],[.8,.07],[.55,.1],[.32,.16]]){g.globalAlpha=a*al;g.lineWidth=w*wd;g.stroke()}
@@ -205,26 +239,26 @@ function frame(){
   g.fillStyle=fg}
  {let a=0;for(let i=1;i<3;i++)if(Math.abs(R[2][i])>Math.abs(R[2][a]))a=i;
   const al=Math.min(1,Math.max(0,(Math.abs(R[2][a])-.93)/.05));
-  if(al>0&&G.mobs.length){const sgn=R[2][a]>0?1:-1,sg=-sgn,u=(a+1)%3,v=(a+2)%3,occ={};for(const m of G.mobs){const k=m.x+','+m.y+','+m.z;occ[k]=(occ[k]||0)+1}
+  if(al>0&&G.mobs.length){const sgn=R[2][a]>0?1:-1,sg=-sgn,u=(a+1)%3,v=(a+2)%3,occ={};for(const m of G.mobs){const k=m.x+','+m.y+','+m.z;(occ[k]=occ[k]||[]).push(m)}
    g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';
    for(let i=0;i<N;i++)for(let j=0;j<N;j++){let n=0,prev=null;
-    for(let t=0;t<N;t++){const c=[0,0,0];c[a]=sg>0?t:N-1-t;c[u]=i;c[v]=j;if(prev&&blocked(prev,c))break;n+=occ[c.join()]||0;prev=c}
+    for(let t=0;t<N;t++){const c=[0,0,0];c[a]=sg>0?t:N-1-t;c[u]=i;c[v]=j;if(prev&&blocked(prev,c))break;n+=(occ[c.join()]||[]).filter(m=>!m.sh||vuln(m,a,sg)).length;prev=c}
     if(n<CFG.minCount)continue;const w=[0,0,0];w[a]=sgn*2.5;w[u]=i-2;w[v]=j-2;const P=proj(...w);
     g.font='700 '+sc*P[3]*.26+'px ui-monospace,Menlo,monospace';g.globalAlpha=al;g.lineWidth=3*dpr;g.strokeStyle=bgc;g.strokeText(n,P[0],P[1]);g.fillStyle=fg;g.fillText(n,P[0],P[1])}
    g.strokeStyle=fg;g.globalAlpha=1}}
- if(G.st==='tut'&&G.tut.s===2&&now-G.tut.t>16000&&G.mobs.length===3){const A=proj(-1,1,-2.5),B=proj(-1,1,2.5);g.setLineDash([6*dpr,8*dpr]);g.globalAlpha=.35+.25*Math.sin(now/300);g.lineWidth=2*dpr;g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke();g.setLineDash([])}
+ if(G.st==='tut'&&((G.tut.s===2&&!G.tut.kind&&now-G.tut.t>16000&&G.mobs.length===3)||(G.tut.hint&&G.tut.s===0&&now-G.tut.t>12000&&G.mobs.length))){const hp2=G.tut.hint||[[-1,1,-2.5],[-1,1,2.5]],A=proj(...hp2[0]),B=proj(...hp2[1]);g.setLineDash([6*dpr,8*dpr]);g.globalAlpha=.35+.25*Math.sin(now/300);g.lineWidth=2*dpr;g.beginPath();g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1]);g.stroke();g.setLineDash([])}
  FX=FX.filter(f=>now-f.t<1200);
  const bg=getComputedStyle(root).getPropertyValue('--bg').trim();g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';if('letterSpacing'in g)g.letterSpacing=(2*dpr)+'px';
  for(const f of FX){const a=(now-f.t)/1200,P=proj(...f.c),pop=1+.6*Math.max(0,1-(now-f.t)/150),x=Math.max(70*dpr,Math.min(W-70*dpr,P[0])),y=Math.max(40*dpr,P[1]-a*sc*.7);
   f.L.forEach((l,i)=>{const yy=y+(i-(f.L.length-1)/2)*24*dpr*pop;g.font='700 '+l.z*dpr*pop+'px ui-monospace,Menlo,monospace';g.globalAlpha=1-a*a;g.lineWidth=4*dpr;g.strokeStyle=bg;g.strokeText(l.s,x,yy);g.fillStyle=fg;g.fillText(l.s,x,yy)})}
  if('letterSpacing'in g)g.letterSpacing='0px';g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;
  let big='';
- if(G.st==='idle')big='TAP TO START\npinch to resize · drag to spin · tap a face to beam';else if(G.st==='over')big='GAME OVER'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to restart';else if(G.st==='win')big='THANK YOU FOR PLAYING'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to return to start';
- else if(G.st==='count')big=String(G.cdl);else if(G.st==='rm')big='PHASE '+G.n+' CLEAR'+(G.flaw?' +flawless':'');
+ if(G.st==='idle')big='TAP TO START\npinch to resize · drag to spin · tap a face to beam';else if(G.st==='over')big='GAME OVER'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best+'\ntap to restart';else if(G.st==='win')big='THANK YOU FOR PLAYING'+(G.nb?' · NEW BEST!':'')+'\nscore '+G.score+' · best '+best;else if(G.st==='end')big='THE CUBE SURVIVES.. FOR NOW\nfinal score '+G.score+(G.nb?' · NEW BEST!':'')+' · best '+best+'\ntap to return to menu';
+ else if(G.st==='count')big=(G.n===26?'PHASE 26 · ALL TYPES MIX\n':'')+G.cdl;else if(G.st==='rm')big='PHASE '+G.n+' CLEAR'+(G.flaw?' +flawless':'');
  else if(G.pop&&now-G.pop.t<900)big=G.pop.s;
- if(G.st==='tut'&&!paused)tutUpdate(now);if(G.st==='tut')big=G.tut.next?'Nice!':PR[G.tut.s];if(paused)big='PAUSED';$('big').textContent=big;$('sk').style.display=G.st==='tut'?'block':'none';$('pz').style.display=(G.st==='play'||G.st==='count'||G.st==='rm'||G.st==='tut')?'block':'none';$('pz').textContent=paused?'resume':'pause';$('ht').style.display=G.st==='idle'?'block':'none';$('sp').classList.toggle('hint',G.st==='tut'&&G.tut.s===2&&now-G.tut.t>8000);
+ if(G.st==='tut'&&!paused)tutUpdate(now);if(G.st==='tut')big=G.tut.next?'Nice!':G.tut.kind?(G.tut.s?'Good luck.':PRI[G.tut.kind]):PR[G.tut.s];if(paused)big='PAUSED';$('big').textContent=big;$('sk').style.display=G.st==='tut'?'block':'none';$('pz').style.display=(G.st==='play'||G.st==='count'||G.st==='rm'||G.st==='tut')?'block':'none';$('pz').textContent=paused?'resume':'pause';$('ct').style.display=$('mn').style.display=(G.st==='win'&&now-G.wt>700)?'block':'none';$('big').style.bottom=G.st==='win'?'calc(112px + env(safe-area-inset-bottom,0px))':'';$('ht').style.display=G.st==='idle'?'block':'none';$('sp').classList.toggle('hint',G.st==='tut'&&(G.tut.kind?G.tut.s===0:G.tut.s===2)&&now-G.tut.t>8000);
  const bar=(n,m,a,b)=>a.repeat(Math.max(0,n))+b.repeat(Math.max(0,m-n));
- $('t').textContent=G.st==='tut'?'TUTORIAL '+Math.min(5,G.tut.s+1)+'/5':'SCORE '+G.score+'  BEST '+Math.max(best,G.score)+'\nHP    '+bar(G.hp,CFG.hp,'■','□')+'\nHEAL  '+bar(G.heal,CFG.heal,'█','░')+'\nCOMBO x'+Math.min(5,Math.max(1,G.combo))+'\nPHASE '+G.n+'/'+CFG.maxPhase+'  '+q.bpm+'bpm\nMOBS LEFT '+(G.st==='play'?q.budget-G.spawned+G.mobs.length:'-');
+ $('t').textContent=G.st==='tut'?(G.tut.kind?'NEW MOB: '+G.tut.kind.toUpperCase():'TUTORIAL '+Math.min(5,G.tut.s+1)+'/5'):'SCORE '+G.score+'  BEST '+Math.max(best,G.score)+'\nHP    '+bar(G.hp,CFG.hp,'■','□')+'\nHEAL  '+bar(G.heal,CFG.heal,'█','░')+'\nCOMBO x'+Math.min(5,Math.max(1,G.combo))+'\nPHASE '+G.n+'/'+(G.cont?CFG.endPhase:CFG.maxPhase)+'  '+q.bpm+'bpm\nMOBS LEFT '+(G.st==='play'?q.budget-G.spawned+G.mobs.length:'-');
  requestAnimationFrame(frame)}
 fresh();if(!tutSeen)startTut();requestAnimationFrame(frame);
 </script></body></html>
